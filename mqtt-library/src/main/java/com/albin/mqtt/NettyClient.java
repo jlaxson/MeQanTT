@@ -21,6 +21,7 @@ import java.util.concurrent.Executors;
 import org.jboss.netty.bootstrap.ClientBootstrap;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
@@ -33,6 +34,7 @@ import com.albin.mqtt.message.PublishMessage;
 import com.albin.mqtt.message.QoS;
 import com.albin.mqtt.message.SubscribeMessage;
 import com.albin.mqtt.message.UnsubscribeMessage;
+import com.albin.mqtt.netty.HeartbeatHandler;
 import com.albin.mqtt.netty.MqttMessageDecoder;
 import com.albin.mqtt.netty.MqttMessageEncoder;
 import com.albin.mqtt.netty.MqttMessageHandler;
@@ -44,9 +46,17 @@ public class NettyClient {
 	private final String id;
 	private MqttListener listener;
 	private MqttMessageHandler handler;
+	
+	private final String host;
+	private final int port;
+	private final int keepAlive = 900;
+	private final QoS defaultQos;
 
-	public NettyClient(String id) {
+	public NettyClient(String id, String host, int port, QoS defaultQos) {
 		this.id = id;
+		this.host = host;
+		this.port = port;
+		this.defaultQos = defaultQos;
 	}
 	
 	public void setListener(MqttListener listener) {
@@ -59,7 +69,7 @@ public class NettyClient {
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#connect(java.lang.String, int)
 	 */
-	public void connect(String host, int port) {
+	public void connect(final boolean cleanSession) {
 		bootstrap = new ClientBootstrap(new NioClientSocketChannelFactory(
 				Executors.newCachedThreadPool(),
 				Executors.newCachedThreadPool()));
@@ -87,10 +97,12 @@ public class NettyClient {
 		if (!future.isSuccess()) {
 			future.getCause().printStackTrace();
 			bootstrap.releaseExternalResources();
+			listener.disconnected();
 			return;
 		}
+		channel.write(new ConnectMessage(id, cleanSession, keepAlive));
 
-		channel.write(new ConnectMessage(id, true, 30));
+		
 		// TODO: Should probably wait for the ConnAck message
 	}
 
@@ -102,12 +114,20 @@ public class NettyClient {
 		channel.close().awaitUninterruptibly();
 		bootstrap.releaseExternalResources();
 	}
+	
+	public boolean isConnected() {
+		return channel.isConnected();
+	}
 
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#subscribe(java.lang.String)
 	 */
 	public void subscribe(String topic) {
-		channel.write(new SubscribeMessage(topic, QoS.AT_MOST_ONCE));
+		subscribe(topic, defaultQos);
+	}
+	
+	public void subscribe(String topic, QoS qosLevel) {
+		channel.write(new SubscribeMessage(topic, qosLevel));
 	}
 
 	/* (non-Javadoc)
@@ -120,6 +140,10 @@ public class NettyClient {
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#publish(java.lang.String, java.lang.String)
 	 */
+	public void publish(String topic, byte[] msg) {
+		channel.write(new PublishMessage(topic, msg));
+	}
+	
 	public void publish(String topic, String msg) {
 		channel.write(new PublishMessage(topic, msg));
 	}
