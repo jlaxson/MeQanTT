@@ -69,8 +69,11 @@ public class NettyClient {
 		bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
 
 			public ChannelPipeline getPipeline() throws Exception {
-				return Channels.pipeline(new MqttMessageEncoder(),
-						new MqttMessageDecoder(), handler);
+				return Channels.pipeline(
+						new MqttMessageEncoder(),
+						new MqttMessageDecoder(), 
+						new HeartbeatHandler(5000, 3, 1000),
+						handler);
 			}
 		});
 
