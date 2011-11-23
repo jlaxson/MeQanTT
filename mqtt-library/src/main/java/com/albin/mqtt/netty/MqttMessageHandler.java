@@ -24,7 +24,11 @@ import org.jboss.netty.channel.SimpleChannelHandler;
 import com.albin.mqtt.MqttListener;
 import com.albin.mqtt.message.ConnAckMessage;
 import com.albin.mqtt.message.Message;
+import com.albin.mqtt.message.PingReqMessage;
+import com.albin.mqtt.message.PingRespMessage;
+import com.albin.mqtt.message.PubAckMessage;
 import com.albin.mqtt.message.PublishMessage;
+import com.albin.mqtt.message.QoS;
 
 public class MqttMessageHandler extends SimpleChannelHandler {
 	
@@ -49,33 +53,59 @@ public class MqttMessageHandler extends SimpleChannelHandler {
 	@Override
 	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
 			throws Exception {
-		handleMessage((Message) e.getMessage());
+		handleMessage(ctx, (Message) e.getMessage());
 	}
 	
-	private void handleMessage(Message msg) {
+	private void handleMessage(ChannelHandlerContext ctx, Message msg) {
 		if (msg == null) {
 			return;
 		}
 		switch (msg.getType()) {
 		case CONNACK:
-			handleMessage((ConnAckMessage) msg);
+			handleMessage(ctx, (ConnAckMessage) msg);
 			break;
 		case PUBLISH:
-			handleMessage((PublishMessage) msg);
+			handleMessage(ctx, (PublishMessage) msg);
 			break;
+		case PINGREQ:
+			handleMessage(ctx, (PingReqMessage) msg);
+			break;
+		case PINGRESP:
+			handleMessage(ctx, (PingRespMessage) msg);
 		default:
 			break;
 		}
+		
+		
 	}
 
-	private void handleMessage(ConnAckMessage msg) {
-		// What to do here?
+	private void handleMessage(ChannelHandlerContext ctx, ConnAckMessage msg) {
+		if (listener != null) {
+			listener.connected();
+		}
 	}
 
-	private void handleMessage(PublishMessage msg) {
+	private void handleMessage(ChannelHandlerContext ctx, PublishMessage msg) {
 		if (listener != null) {
 			listener.publishArrived(msg.getTopic(), msg.getData());
+			if (msg.getQos() == QoS.AT_LEAST_ONCE) {
+				acknowledgeMessage(ctx, msg);
+			}
 		}
+	}
+	
+	private void handleMessage(ChannelHandlerContext ctx, PingReqMessage msg) {
+		PingRespMessage reply = new PingRespMessage();
+		ctx.getChannel().write(reply);
+	}
+	
+	private void handleMessage(ChannelHandlerContext ctx, PingRespMessage msg) {
+		
+	}
+
+	private void acknowledgeMessage(ChannelHandlerContext ctx, PublishMessage msg) {
+		PubAckMessage reply = new PubAckMessage(msg.getMessageId());
+		ctx.getChannel().write(reply);
 	}
 
 	public void setListener(MqttListener listener) {

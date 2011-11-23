@@ -57,10 +57,10 @@ public abstract class Message {
 		
 		private Type type;
 		private boolean retain;
-		private QoS qos = QoS.AT_MOST_ONCE;
+		private QoS qos = QoS.AT_LEAST_ONCE;
 		private boolean dup;
 		
-		private Header(Type type, boolean retain, QoS qos, boolean dup) {
+		public Header(Type type, boolean retain, QoS qos, boolean dup) {
 			this.type = type;
 			this.retain = retain;
 			this.qos = qos;
